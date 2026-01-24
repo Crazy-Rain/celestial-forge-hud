@@ -4,7 +4,9 @@
     top: 0;
     right: 0;
     width: 350px;
-    height: 100vh;
+    /* FIX: Use dvh for mobile browsers, fallback to 100% */
+    height: 100%; 
+    height: 100dvh; 
     background: rgba(26, 26, 46, 0.95);
     border-left: 2px solid #e94560;
     z-index: 2000;
@@ -17,6 +19,14 @@
     backdrop-filter: blur(5px);
 }
 
+/* Mobile responsive width */
+@media (max-width: 500px) {
+    #forge-hud-container {
+        width: 100%; /* Take full width on small phones */
+        border-left: none;
+    }
+}
+
 #forge-hud-container.hidden {
     transform: translateX(100%);
 }
@@ -27,6 +37,8 @@
     background: #16213e;
     text-align: center;
     border-bottom: 1px solid #e94560;
+    /* Prevent shrinking */
+    flex-shrink: 0; 
 }
 
 .forge-title {
@@ -46,13 +58,20 @@
     padding: 15px;
     background: rgba(0,0,0,0.2);
     border-bottom: 1px solid #333;
+    flex-shrink: 0;
 }
 .cp-box { text-align: center; }
 .cp-label { font-size: 10px; color: #888; text-transform: uppercase; }
 .cp-val { font-size: 22px; color: #ffd700; font-weight: bold; }
 
 /* METERS */
-.meters-area { padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+.meters-area { 
+    padding: 15px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 10px; 
+    flex-shrink: 0; 
+}
 .meter-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
 .meter-label { width: 70px; font-weight: bold; color: #ccc; }
 .meter-track { flex: 1; height: 8px; background: #333; border-radius: 4px; overflow: hidden; }
@@ -60,9 +79,10 @@
 
 /* PERKS LIST */
 .perks-list {
-    flex: 1;
-    overflow-y: auto;
+    flex: 1; /* This makes it take up remaining space */
+    overflow-y: auto; /* Allows scrolling inside this div */
     padding: 10px;
+    padding-bottom: 20px; /* Extra space at bottom */
 }
 .perks-title {
     font-size: 12px;
@@ -100,6 +120,7 @@
 /* TOGGLE BUTTON */
 #forge-toggle-btn {
     position: fixed;
+    /* Default position, will be overridden by JS dragging */
     top: 10px;
     right: 20px;
     width: 40px;
@@ -112,9 +133,19 @@
     justify-content: center;
     align-items: center;
     font-size: 20px;
-    cursor: pointer;
+    cursor: grab; /* Changed cursor to indicate draggable */
     z-index: 2001;
     box-shadow: 0 0 10px rgba(0,0,0,0.5);
-    transition: all 0.2s;
+    transition: transform 0.1s, background 0.2s; /* Removed 'all' to prevent drag lag */
+    touch-action: none; /* Critical for dragging on mobile */
+    user-select: none;
 }
-#forge-toggle-btn:hover { transform: scale(1.1); }
+
+#forge-toggle-btn:active {
+    cursor: grabbing;
+    transform: scale(0.95);
+}
+
+#forge-toggle-btn:hover { 
+    background: #23345c;
+           }
