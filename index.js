@@ -1,7 +1,6 @@
-// CELESTIAL FORGE HUD v1.0
+// CELESTIAL FORGE HUD v1.2
 const FORGE_Extension = {
     name: 'celestial-forge-hud',
-    // Default state if nothing is found
     state: {
         available_cp: 0,
         total_cp: 0,
@@ -14,18 +13,15 @@ const FORGE_Extension = {
         console.log('[Forge HUD] Initializing...');
         this.injectHTML();
         this.bindEvents();
-        // Check initial load
         setTimeout(() => this.scanLastMessage(), 2000);
     },
 
     injectHTML: function() {
-        // Remove existing if any (for reloading)
         $('#forge-hud-container').remove();
         $('#forge-toggle-btn').remove();
 
-        // The Main Sidebar
         const html = `
-            <div id="forge-toggle-btn" title="Toggle Forge HUD">⚒️</div>
+            <div id="forge-toggle-btn" title="Drag to move, Click to toggle">⚒️</div>
             <div id="forge-hud-container" class="hidden">
                 <div class="forge-header">
                     <h3 class="forge-title">Celestial Forge</h3>
@@ -62,8 +58,7 @@ const FORGE_Extension = {
 
                 <div class="perks-list">
                     <div class="perks-title">Acquired Perks (<span id="hud-perk-count">0</span>)</div>
-                    <div id="hud-perks-container">
-                        </div>
+                    <div id="hud-perks-container"></div>
                 </div>
             </div>
         `;
@@ -71,74 +66,146 @@ const FORGE_Extension = {
     },
 
     bindEvents: function() {
-        // Toggle Button Logic
-        $(document).on('click', '#forge-toggle-btn', function() {
+        const btn = document.getElementById('forge-toggle-btn');
+        let isDragging = false;
+        let hasMoved = false;
+        let startX, startY, initialLeft, initialTop;
+
+        // --- COMMON HANDLERS ---
+        
+        const startDrag = (clientX, clientY) => {
+            isDragging = true;
+            hasMoved = false;
+            startX = clientX;
+            startY = clientY;
+            
+            const rect = btn.getBoundingClientRect();
+            initialTop = rect.top;
+            initialLeft = rect.left;
+        };
+
+        const moveDrag = (clientX, clientY) => {
+            if (!isDragging) return;
+            
+            // Calculate distance moved to detect if it's a click or a drag
+            const dist = Math.sqrt(Math.pow(clientX - startX, 2) + Math.pow(clientY - startY, 2));
+            if (dist > 5) hasMoved = true;
+
+            const dx = clientX - startX;
+            const dy = clientY - startY;
+
+            let newTop = initialTop + dy;
+            let newLeft = initialLeft + dx;
+
+            // Boundaries
+            const maxTop = window.innerHeight - btn.offsetHeight;
+            const maxLeft = window.innerWidth - btn.offsetWidth;
+            
+            newTop = Math.max(0, Math.min(newTop, maxTop));
+            newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+
+            btn.style.top = `${newTop}px`;
+            btn.style.left = `${newLeft}px`;
+            btn.style.right = 'auto';
+        };
+
+        const endDrag = () => {
+            isDragging = false;
+        };
+
+        // --- MOUSE EVENTS ---
+        
+        btn.addEventListener('mousedown', (e) => {
+            startDrag(e.clientX, e.clientY);
+            
+            const onMouseMove = (ev) => moveDrag(ev.clientX, ev.clientY);
+            const onMouseUp = () => {
+                endDrag();
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        // --- TOUCH EVENTS ---
+
+        btn.addEventListener('touchstart', (e) => {
+            // Prevent default browser behavior (zooming/scrolling) on the button
+            if(e.cancelable) e.preventDefault(); 
+            
+            const touch = e.touches[0];
+            startDrag(touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        btn.addEventListener('touchmove', (e) => {
+            // CRITICAL: Stop the page from scrolling while dragging
+            if(e.cancelable) e.preventDefault();
+            
+            const touch = e.touches[0];
+            moveDrag(touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        btn.addEventListener('touchend', (e) => {
+            endDrag();
+            // If we haven't moved much, treat as a click
+            if (!hasMoved) {
+                $('#forge-hud-container').toggleClass('hidden');
+            }
+        });
+
+        // --- CLICK (Mouse only) ---
+        // Touch clicks are handled in touchend to avoid conflicts
+        btn.addEventListener('click', (e) => {
+            if (hasMoved) return;
             $('#forge-hud-container').toggleClass('hidden');
         });
 
-        // SillyTavern Event Listeners
+        // --- SillyTavern Events ---
         const context = SillyTavern.getContext();
-        
-        // When a new message arrives
-        context.eventSource.on(context.eventTypes.MESSAGE_RECEIVED, () => {
-            this.scanLastMessage();
-        });
-        
-        // When chat is changed/loaded
-        context.eventSource.on(context.eventTypes.CHAT_CHANGED, () => {
-            this.scanLastMessage();
-        });
+        context.eventSource.on(context.eventTypes.MESSAGE_RECEIVED, () => this.scanLastMessage());
+        context.eventSource.on(context.eventTypes.CHAT_CHANGED, () => this.scanLastMessage());
     },
 
     scanLastMessage: function() {
         const context = SillyTavern.getContext();
         const chat = context.chat;
-        
         if (!chat || chat.length === 0) return;
 
-        // Look backwards from the last message to find a forge block
-        // This ensures if the last message was a system note, we still find the data
         let foundBlock = false;
         for (let i = chat.length - 1; i >= 0; i--) {
             const msg = chat[i];
             if (!msg.mes) continue;
 
-            // Regex to find the ```forge ... ``` block
             const blockMatch = msg.mes.match(/```forge\s*([\s\S]*?)```/);
-            
             if (blockMatch && blockMatch[1]) {
                 try {
                     const data = JSON.parse(blockMatch[1]);
-                    // We assume standard structure: { characters: [ { stats: ... } ] }
-                    // OR simple structure: { stats: ... }
                     let stats = null;
-                    
                     if (data.characters && data.characters[0] && data.characters[0].stats) {
                         stats = data.characters[0].stats;
                     } else if (data.stats) {
                         stats = data.stats;
                     }
-
+                    
                     if (stats) {
                         this.updateDisplay(stats);
                         foundBlock = true;
-                        break; // Stop looking once we find the latest block
+                        break;
                     }
                 } catch (e) {
                     console.error('[Forge HUD] JSON Parse Error:', e);
                 }
             }
         }
-        
-        if (!foundBlock) console.log('[Forge HUD] No valid forge block found in recent history.');
+        if (!foundBlock) console.log('[Forge HUD] No valid forge block found.');
     },
 
     updateDisplay: function(stats) {
-        // Update Numbers
         $('#hud-avail-cp').text(stats.available_cp || 0);
         $('#hud-total-cp').text(stats.total_cp || 0);
         
-        // Update Meters
         const corr = stats.corruption || 0;
         const san = stats.sanity || 0;
         $('#hud-bar-corr').css('width', corr + '%');
@@ -146,7 +213,6 @@ const FORGE_Extension = {
         $('#hud-bar-san').css('width', san + '%');
         $('#hud-val-san').text(san + '%');
 
-        // Update Perks List
         const perks = stats.perks || [];
         $('#hud-perk-count').text(stats.perk_count || perks.length);
         
@@ -157,14 +223,12 @@ const FORGE_Extension = {
             const activeClass = perk.active ? 'active' : '';
             const statusText = perk.active ? 'ACTIVE' : 'OFFLINE';
             
-            // Build Flags HTML
             let flagsHtml = '';
             if (perk.flags && Array.isArray(perk.flags)) {
                 perk.flags.forEach(f => flagsHtml += `<span class="flag">${f}</span>`);
             }
             flagsHtml += `<span class="flag ${activeClass}">${statusText}</span>`;
 
-            // Build Scaling HTML
             let scalingHtml = '';
             if (perk.scaling) {
                 const percent = perk.scaling.xp_percent || 0;
@@ -197,7 +261,6 @@ const FORGE_Extension = {
     }
 };
 
-// Start the extension
 jQuery(document).ready(function() {
     FORGE_Extension.init();
 });
