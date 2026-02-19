@@ -1,0 +1,11 @@
+{
+    "display_name": "Celestial Forge HUD",
+    "loading_order": 50,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Crazy-Rain",
+    "version": "1.2.0",
+    "homepage": "https://github.com/Crazy-Rain/celestial-forge-hud"
+}
